@@ -53,6 +53,21 @@ fn list_secrets() -> Value {
     load_manifest()
 }
 
+fn pbcopy(text: &str) -> Result<(), String> {
+    let mut child = Command::new("pbcopy")
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("pbcopy stdin unavailable")?
+        .write_all(text.as_bytes())
+        .map_err(|e| e.to_string())?;
+    child.wait().ok();
+    Ok(())
+}
+
 #[tauri::command]
 fn add_secret(
     name: String,
@@ -61,6 +76,7 @@ fn add_secret(
     env: String,
     allow: String,
     note: String,
+    account: String,
 ) -> Result<String, String> {
     if !valid_name(&name) {
         return Err("name must be letters, digits, dot, dash, underscore".into());
@@ -68,7 +84,11 @@ fn add_secret(
     if value.is_empty() {
         return Err("empty value — nothing stored".into());
     }
-    let account = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
+    let account = if account.trim().is_empty() {
+        std::env::var("USER").unwrap_or_else(|_| "unknown".into())
+    } else {
+        account.trim().to_string()
+    };
     let envvar = if env.trim().is_empty() {
         name.to_uppercase().replace(['-', '.'], "_")
     } else {
@@ -143,17 +163,7 @@ fn copy_secret(name: String) -> Result<String, String> {
         return Err(format!("keychain lookup failed for '{name}'"));
     }
     let value = String::from_utf8_lossy(&out.stdout).trim_end_matches('\n').to_string();
-    let mut child = Command::new("pbcopy")
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    child
-        .stdin
-        .take()
-        .ok_or("pbcopy stdin unavailable")?
-        .write_all(value.as_bytes())
-        .map_err(|e| e.to_string())?;
-    child.wait().ok();
+    pbcopy(&value)?;
     drop(value);
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(30));
@@ -163,6 +173,23 @@ fn copy_secret(name: String) -> Result<String, String> {
         }
     });
     Ok(format!("'{name}' on clipboard — clears in 30 s"))
+}
+
+// The account/ID is pointer metadata (not a secret) — copying it is free.
+#[tauri::command]
+fn copy_account(name: String) -> Result<String, String> {
+    let m = load_manifest();
+    let acct = m["secrets"]
+        .as_array()
+        .and_then(|a| a.iter().find(|s| s["name"] == name.as_str()))
+        .and_then(|s| s["account"].as_str())
+        .unwrap_or("")
+        .to_string();
+    if acct.is_empty() {
+        return Err("no account stored".into());
+    }
+    pbcopy(&acct)?;
+    Ok(format!("ID '{acct}' copied"))
 }
 
 fn toggle(app: &tauri::AppHandle) {
@@ -248,7 +275,8 @@ fn main() {
             list_secrets,
             add_secret,
             remove_secret,
-            copy_secret
+            copy_secret,
+            copy_account
         ])
         .build(tauri::generate_context!())
         .expect("error while running blind-vault")

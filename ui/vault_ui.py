@@ -204,8 +204,9 @@ PAGE = r"""<!doctype html>
     <aside class="panel">
       <h2>Add a secret</h2>
       <form id="add" autocomplete="off">
-        <div><label>Name</label><input name="name" placeholder="openai-api-key" required></div>
-        <div><label>Value</label><input name="value" type="password" placeholder="pasted here → straight to Keychain" required></div>
+        <div><label>Name</label><input name="name" placeholder="openai-api-key · github-login" required></div>
+        <div><label>Account / ID (optional — for logins)</label><input name="account" placeholder="you@example.com"></div>
+        <div><label>Value — API key or password</label><input name="value" type="password" placeholder="pasted here → straight to Keychain" required></div>
         <div><label>Service</label><input name="service" placeholder="OpenAI"></div>
         <div><label>Allowed for</label><input name="allow" placeholder="api.openai.com, curl"></div>
         <div><label>Env var</label><input name="env" placeholder="OPENAI_API_KEY (auto)"></div>
@@ -242,6 +243,7 @@ async function refresh(){
         <div class="meta">
           <span class="env">$${esc(s.env)}</span>
           ${s.service?`<span>${esc(s.service)}</span>`:""}
+          ${s.account?`<span class="chip">👤 ${esc(s.account)}</span>`:""}
           ${(s.allowed_for||[]).map(a=>`<span class="chip">${esc(a)}</span>`).join("")}
         </div>
       </div>

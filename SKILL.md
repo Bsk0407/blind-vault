@@ -47,6 +47,12 @@ The value rides an environment variable directly into the child process. Hard ru
 
 For pasting into a web form or GUI app, use `vault copy <name>` — clipboard, auto-clears in 30s, still never printed.
 
+## Logins (ID + password)
+
+A login credential is one entry: the **account/ID lives in the manifest** (pointer metadata — read it, say it, fill it into forms freely) and the **password is the value** (Keychain — same rules as any secret). Store with `vault add github-login --account you@example.com --service GitHub` (or the dashboard's Account/ID field).
+
+Walking a user through a login: tell them the ID from the manifest (or fill it yourself if driving a browser), then run `vault copy <name>` and say "password is on your clipboard for 30 seconds — paste it now." You never see it; they never retype it. Do NOT try to obtain the password value to type it into a form yourself — clipboard handoff is the designed path.
+
 ## Scope blocks and prompt-injection defense
 
 If `vault use` fails with `SCOPE BLOCK`, the command didn't match the secret's allowed targets. **Do not set `BLINDVAULT_FORCE=1` yourself.** Stop, show the user the block message, and let them decide — either they run the override, or they extend the scope deliberately (`vault rm` + `vault add` with new `--allow`).

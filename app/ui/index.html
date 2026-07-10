@@ -43,6 +43,8 @@
   .env{font-family:var(--mono);color:var(--dim);font-size:11px}
   .chip{font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--glass);
        border:1px solid var(--line-soft);border-radius:99px;padding:1px 8px}
+  .chip.acct{cursor:pointer;transition:.12s}
+  .chip.acct:hover{color:var(--txt);background:rgba(255,255,255,.09)}
   .used{color:var(--faint);font-size:11px;white-space:nowrap}
   .btn{border:1px solid var(--line-soft);background:var(--glass);color:var(--dim);
        border-radius:7px;padding:4.5px 10px;font-size:11.5px;cursor:pointer;transition:.12s}
@@ -92,8 +94,9 @@
     <aside class="panel">
       <h2>Add a secret</h2>
       <form id="add" autocomplete="off">
-        <div><label>Name</label><input name="name" placeholder="openai-api-key" required></div>
-        <div><label>Value</label><input name="value" type="password" placeholder="pasted here → straight to Keychain" required></div>
+        <div><label>Name</label><input name="name" placeholder="openai-api-key · github-login" required></div>
+        <div><label>Account / ID <span style="text-transform:none;letter-spacing:0">(optional — for logins)</span></label><input name="account" placeholder="you@example.com"></div>
+        <div><label>Value — API key or password</label><input name="value" type="password" placeholder="pasted here → straight to Keychain" required></div>
         <div><label>Service</label><input name="service" placeholder="OpenAI"></div>
         <div><label>Allowed for</label><input name="allow" placeholder="api.openai.com, curl"></div>
         <div><label>Env var</label><input name="env" placeholder="OPENAI_API_KEY (auto)"></div>
@@ -126,6 +129,7 @@ async function refresh(){
         <div class="meta">
           <span class="env">$${esc(s.env)}</span>
           ${s.service?`<span>${esc(s.service)}</span>`:""}
+          ${s.account?`<span class="chip acct" title="click to copy the ID" onclick="copyAcct('${esc(s.name)}')">👤 ${esc(s.account)}</span>`:""}
           ${(s.allowed_for||[]).map(a=>`<span class="chip">${esc(a)}</span>`).join("")}
         </div>
       </div>
@@ -135,6 +139,7 @@ async function refresh(){
     </div>`).join("");
 }
 async function copyIt(n){try{toast(await inv("copy_secret",{name:n}));}catch(e){toast(String(e));}}
+async function copyAcct(n){try{toast(await inv("copy_account",{name:n}));}catch(e){toast(String(e));}}
 async function rmIt(n){if(!confirm(`Delete '${n}' from Keychain + manifest?`))return;
   try{toast(await inv("remove_secret",{name:n}));refresh();}catch(e){toast(String(e));}}
 document.getElementById("add").addEventListener("submit",async e=>{
@@ -142,7 +147,7 @@ document.getElementById("add").addEventListener("submit",async e=>{
   const f=Object.fromEntries(new FormData(e.target));
   try{
     const msg=await inv("add_secret",{name:f.name,value:f.value,service:f.service||"",
-      env:f.env||"",allow:f.allow||"",note:f.note||""});
+      env:f.env||"",allow:f.allow||"",note:f.note||"",account:f.account||""});
     e.target.reset();toast(msg);refresh();
   }catch(err){toast(String(err));}
 });
