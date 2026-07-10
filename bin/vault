@@ -31,6 +31,10 @@ blind-vault — secrets your AI agent can use but never see
                                         the value is visible to the calling process)
   vault use <name> -- <command...>    run command with the secret injected as env var
   vault copy <name>                   copy value to clipboard (auto-clears in 30s)
+  vault type <name> [flags]           type into the focused browser field (OS keystrokes)
+      --account                         type the stored ID first, then Tab
+      --enter                           press Return after
+      --delay <N>                       seconds to switch focus (default 4)
   vault ls                            list pointers (never values)
   vault ui                            open the local dashboard (127.0.0.1, humans only)
   vault rm <name>                     delete from Keychain + manifest
@@ -185,6 +189,77 @@ for s in ss:
 PY
 }
 
+# Type a secret into the focused input via System Events keystrokes.
+# Value path: Keychain -> env of osascript -> OS key events. Never printed,
+# never in the agent's context, never on a command line (env, not argv).
+cmd_type() {
+  need_manifest
+  [ $# -ge 1 ] || die "usage: vault type <name> [--account] [--enter] [--delay N]"
+  local name="$1"; shift
+  local with_account=0 enter=0 delay=4
+  while [ $# -gt 0 ]; do case "$1" in
+    --account) with_account=1; shift;;
+    --enter)   enter=1; shift;;
+    --delay)   delay="$2"; shift 2;;
+    *) die "unknown flag: $1";;
+  esac; done
+
+  local account=""
+  if [ "$with_account" = 1 ]; then
+    account=$(python3 - "$MANIFEST" "$name" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+for s in d["secrets"]:
+    if s["name"] == sys.argv[2]:
+        print(s.get("account") or ""); break
+else:
+    sys.exit(3)
+PY
+    ) || die "no secret named '$name'"
+    [ -n "$account" ] || die "'$name' has no account/ID stored"
+  fi
+
+  local value
+  value=$(security find-generic-password -w -s "$PREFIX.$name") || die "keychain lookup failed for '$name'"
+
+  echo "typing in ${delay}s — click the target field now (a browser must be frontmost)..."
+  sleep "$delay"
+
+  # Frontmost-app guard: refuse to type anywhere except a browser, so a missed
+  # click can never spray a password into a chat box or editor.
+  local front apps
+  front=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null) || die "System Events unavailable"
+  apps="${BLINDVAULT_TYPE_APPS:-Safari,Google Chrome,Chromium,Arc,Firefox,Microsoft Edge,Brave Browser,Whale,Dia,Orion}"
+  local ok=0 a
+  IFS=',' read -ra _apps <<< "$apps"
+  for a in "${_apps[@]}"; do [ "$front" = "$a" ] && ok=1; done
+  [ "$ok" = 1 ] || die "frontmost app is '$front', not a browser — aborted, nothing typed. (override list: BLINDVAULT_TYPE_APPS)"
+
+  local acct_esc script
+  acct_esc=$(printf '%s' "$account" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  script=$'tell application "System Events"\n'
+  [ "$with_account" = 1 ] && script+="keystroke \"$acct_esc\""$'\n'"keystroke tab"$'\n'
+  script+=$'keystroke (system attribute "BLINDVAULT_TYPE_VALUE")\n'
+  [ "$enter" = 1 ] && script+=$'keystroke return\n'
+  script+="end tell"
+
+  if ! BLINDVAULT_TYPE_VALUE="$value" osascript -e "$script" >/dev/null 2>&1; then
+    die "keystroke failed — grant Accessibility permission to your terminal/host app:
+System Settings → Privacy & Security → Accessibility, then retry."
+  fi
+  unset value
+
+  python3 - "$MANIFEST" "$name" <<'PY'
+import json, sys, datetime
+d = json.load(open(sys.argv[1]))
+for s in d["secrets"]:
+    if s["name"] == sys.argv[2]:
+        s["last_used"] = datetime.date.today().isoformat()
+json.dump(d, open(sys.argv[1], "w"), indent=2)
+PY
+  echo "typed into '$front'. The value never appeared on screen or in this conversation."
+}
+
 cmd_ui() {
   need_manifest
   local self_dir
@@ -215,6 +290,7 @@ case "${1:-}" in
   use)   shift; cmd_use "$@";;
   copy)  shift; cmd_copy "$@";;
   ls|list) shift; cmd_ls "$@";;
+  type)  shift; cmd_type "$@";;
   ui)    shift; cmd_ui "$@";;
   rm|remove|delete) shift; cmd_rm "$@";;
   -h|--help|help|"") usage;;

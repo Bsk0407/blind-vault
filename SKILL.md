@@ -51,7 +51,13 @@ For pasting into a web form or GUI app, use `vault copy <name>` — clipboard, a
 
 A login credential is one entry: the **account/ID lives in the manifest** (pointer metadata — read it, say it, fill it into forms freely) and the **password is the value** (Keychain — same rules as any secret). Store with `vault add github-login --account you@example.com --service GitHub` (or the dashboard's Account/ID field).
 
-Walking a user through a login: tell them the ID from the manifest (or fill it yourself if driving a browser), then run `vault copy <name>` and say "password is on your clipboard for 30 seconds — paste it now." You never see it; they never retype it. Do NOT try to obtain the password value to type it into a form yourself — clipboard handoff is the designed path.
+Logging a user in — the hands-free path is `vault type`:
+
+1. Open the login page for them (`open <url>`).
+2. Tell them: "click the **username field**, you have a few seconds" — then run `vault type <name> --account --enter --delay 5`.
+3. The OS types ID → Tab → password → Return as raw keystrokes (Keychain → env → System Events; never through your context). A frontmost-app guard aborts unless a browser is focused, so a missed click can't spray the password into a chat box.
+
+Needs Accessibility permission for the host app on first use (the command's error says how). Korean/IME input sources can mangle keystrokes — if the typed text looks wrong, ask the user to switch to ABC input and retry. `vault copy <name>` (clipboard, 30 s) remains the fallback. Never obtain the password value to type it yourself — that would put it in your context.
 
 ## Scope blocks and prompt-injection defense
 
