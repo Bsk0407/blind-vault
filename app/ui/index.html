@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Blind Vault</title>
+<style>
+  :root{
+    --txt:#F2F3F5; --dim:#A6ABB2; --faint:#6E747C; --green:#27DBA2;
+    --line:rgba(255,255,255,.10); --line-soft:rgba(255,255,255,.065);
+    --glass:rgba(255,255,255,.045); --hover:rgba(255,255,255,.06);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:transparent}
+  body{color:var(--txt);-webkit-font-smoothing:antialiased;overflow:hidden;
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
+  .window{display:flex;flex-direction:column;height:100vh;border-radius:16px;overflow:hidden;
+       background:rgba(14,16,20,.38);border:1px solid var(--line);
+       box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .window::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.4;border-radius:16px;
+       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .04 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+  header{display:flex;align-items:center;gap:12px;padding:15px 20px;flex:0 0 auto;
+       border-bottom:1px solid var(--line-soft);cursor:default}
+  h1{font-size:15px;font-weight:650;letter-spacing:-.01em;pointer-events:none}
+  h1 .glyph{margin-right:8px;filter:grayscale(1) brightness(1.3)}
+  .sub{color:var(--faint);font-size:12.5px;pointer-events:none}
+  .local{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--faint);
+       font-size:11px;font-family:var(--mono);background:var(--glass);
+       border:1px solid var(--line-soft);border-radius:99px;padding:3.5px 11px;pointer-events:none}
+  .local .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+       box-shadow:0 0 10px rgba(39,219,162,.8)}
+  main{display:grid;grid-template-columns:1.55fr 1fr;flex:1;min-height:0}
+  section.panel{padding:8px 8px 12px;overflow-y:auto}
+  aside.panel{border-left:1px solid var(--line-soft);padding:8px 8px 12px;overflow-y:auto;
+       background:rgba(255,255,255,.02)}
+  .panel h2{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+       color:var(--faint);padding:11px 13px 7px}
+  .panel h2 span{text-transform:none;letter-spacing:0;font-weight:500}
+  .row{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:10px;transition:background .12s}
+  .row:hover{background:var(--hover)}
+  .id{flex:1;min-width:0}
+  .name{font-family:var(--mono);font-size:13px;font-weight:600}
+  .meta{color:var(--dim);font-size:11.5px;margin-top:2.5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .env{font-family:var(--mono);color:var(--dim);font-size:11px}
+  .chip{font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--glass);
+       border:1px solid var(--line-soft);border-radius:99px;padding:1px 8px}
+  .used{color:var(--faint);font-size:11px;white-space:nowrap}
+  .btn{border:1px solid var(--line-soft);background:var(--glass);color:var(--dim);
+       border-radius:7px;padding:4.5px 10px;font-size:11.5px;cursor:pointer;transition:.12s}
+  .btn:hover{color:var(--txt);background:rgba(255,255,255,.1);border-color:var(--line)}
+  .btn.danger:hover{color:#F2F3F5;background:rgba(244,112,103,.2);border-color:rgba(244,112,103,.32)}
+  .empty{padding:48px 22px;text-align:center;color:var(--faint);font-size:13px;line-height:1.7}
+  .empty b{color:var(--dim)}
+  form{padding:4px 13px;display:flex;flex-direction:column;gap:9px}
+  label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--faint);display:block;margin-bottom:4px}
+  input{background:rgba(0,0,0,.30);border:1px solid var(--line-soft);border-radius:8px;
+       color:var(--txt);padding:7.5px 10px;font-size:13px;width:100%;outline:none;transition:.15s}
+  input:focus{border-color:rgba(39,219,162,.55);box-shadow:0 0 0 3px rgba(39,219,162,.12)}
+  input[type=password]{font-family:var(--mono);letter-spacing:.18em}
+  input::placeholder{color:#565C64;letter-spacing:normal;font-family:-apple-system,sans-serif}
+  .save{background:linear-gradient(180deg,#FFFFFF,#DFE2E6);border:none;color:#0A0B0D;
+       font-weight:650;font-size:13px;border-radius:8px;padding:9px;cursor:pointer;margin-top:4px;
+       box-shadow:0 1px 3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);transition:.12s}
+  .save:hover{filter:brightness(.96)}
+  .save:active{transform:translateY(1px)}
+  .note{color:var(--faint);font-size:11px;line-height:1.6;padding:11px 13px 6px}
+  .note b{color:var(--dim)}
+  .bar{display:flex;align-items:center;gap:10px;padding:10px 18px;flex:0 0 auto;
+       border-top:1px solid var(--line-soft);color:var(--faint);
+       font-size:11px;font-family:var(--mono);background:rgba(0,0,0,.16)}
+  .bar .hints{margin-left:auto;display:flex;gap:13px;align-items:center;
+       font-family:-apple-system,sans-serif;font-size:11px;white-space:nowrap}
+  kbd{font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--glass);
+       border:1px solid var(--line-soft);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:4px}
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(70px);
+       background:rgba(28,30,34,.85);border:1px solid var(--line);color:var(--txt);
+       padding:10px 18px;border-radius:11px;font-size:12.5px;transition:.25s;opacity:0;
+       box-shadow:0 16px 48px rgba(0,0,0,.5);z-index:9}
+  #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+</style></head><body>
+<div class="window">
+  <header data-tauri-drag-region>
+    <h1><span class="glyph">🕶️</span>Blind Vault</h1>
+    <span class="sub">secrets your agent can use — but never see</span>
+    <span class="local"><span class="dot"></span>local · Keychain</span>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>Pointers <span>— the only thing Claude ever reads</span></h2>
+      <div id="list"><div class="empty">loading…</div></div>
+    </section>
+    <aside class="panel">
+      <h2>Add a secret</h2>
+      <form id="add" autocomplete="off">
+        <div><label>Name</label><input name="name" placeholder="openai-api-key" required></div>
+        <div><label>Value</label><input name="value" type="password" placeholder="pasted here → straight to Keychain" required></div>
+        <div><label>Service</label><input name="service" placeholder="OpenAI"></div>
+        <div><label>Allowed for</label><input name="allow" placeholder="api.openai.com, curl"></div>
+        <div><label>Env var</label><input name="env" placeholder="OPENAI_API_KEY (auto)"></div>
+        <div><label>Note</label><input name="note" placeholder="personal, pay-as-you-go"></div>
+        <button class="save" type="submit">Save to Keychain</button>
+      </form>
+      <p class="note"><b>Where the value goes:</b> this form → macOS Keychain, in-process.
+      Never rendered back, never readable by the agent. No “reveal” button — by design.</p>
+    </aside>
+  </main>
+  <div class="bar">
+    Claude reads this list without a value column — because there isn't one.
+    <span class="hints"><span><kbd>⌥⌘V</kbd>Toggle</span><span><kbd>esc</kbd>Hide</span><span><kbd>↵</kbd>Save</span></span>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+const inv=window.__TAURI__.core.invoke;
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let toastT;const toast=m=>{const t=document.getElementById("toast");t.textContent=m;
+  t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),3200);};
+async function refresh(){
+  const d=await inv("list_secrets"),el=document.getElementById("list");
+  if(!d.secrets||!d.secrets.length){el.innerHTML=
+    '<div class="empty"><b>No secrets yet.</b><br>Add your first on the right — Claude will find it by name, never by value.</div>';return;}
+  el.innerHTML=d.secrets.map(s=>`
+    <div class="row">
+      <div class="id">
+        <div class="name">${esc(s.name)}</div>
+        <div class="meta">
+          <span class="env">$${esc(s.env)}</span>
+          ${s.service?`<span>${esc(s.service)}</span>`:""}
+          ${(s.allowed_for||[]).map(a=>`<span class="chip">${esc(a)}</span>`).join("")}
+        </div>
+      </div>
+      <span class="used">${s.last_used?("used "+esc(s.last_used)):"never used"}</span>
+      <button class="btn" onclick="copyIt('${esc(s.name)}')">Copy 30s</button>
+      <button class="btn danger" onclick="rmIt('${esc(s.name)}')">Delete</button>
+    </div>`).join("");
+}
+async function copyIt(n){try{toast(await inv("copy_secret",{name:n}));}catch(e){toast(String(e));}}
+async function rmIt(n){if(!confirm(`Delete '${n}' from Keychain + manifest?`))return;
+  try{toast(await inv("remove_secret",{name:n}));refresh();}catch(e){toast(String(e));}}
+document.getElementById("add").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const f=Object.fromEntries(new FormData(e.target));
+  try{
+    const msg=await inv("add_secret",{name:f.name,value:f.value,service:f.service||"",
+      env:f.env||"",allow:f.allow||"",note:f.note||""});
+    e.target.reset();toast(msg);refresh();
+  }catch(err){toast(String(err));}
+});
+window.addEventListener("keydown",e=>{
+  if(e.key==="Escape")window.__TAURI__.window.getCurrentWindow().hide();
+});
+window.addEventListener("focus",refresh);
+refresh();
+</script>
+</body></html>
