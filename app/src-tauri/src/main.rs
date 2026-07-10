@@ -184,6 +184,9 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let win = app.get_webview_window("main").expect("main window");
+            // Force dark appearance so the vibrancy material stays dark even
+            // when the system is in light mode — white-on-glass depends on it.
+            win.set_theme(Some(tauri::Theme::Dark)).ok();
             #[cfg(target_os = "macos")]
             {
                 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
