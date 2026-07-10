@@ -247,6 +247,17 @@ fn main() {
             remove_secret,
             copy_secret
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running blind-vault");
+        .build(tauri::generate_context!())
+        .expect("error while running blind-vault")
+        .run(|app, event| {
+            // Relaunching the app (Finder/Spotlight) summons the window.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(w) = app.get_webview_window("main") {
+                    w.show().ok();
+                    w.set_focus().ok();
+                }
+            }
+            let _ = (app, &event);
+        });
 }
