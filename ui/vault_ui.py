@@ -106,60 +106,91 @@ PAGE = r"""<!doctype html>
 <title>blind-vault</title>
 <style>
   :root{
-    --bg:#0B0E12; --panel:#11151B; --panel2:#151A21; --line:#1E242C;
-    --txt:#E6EDF3; --dim:#8B949E; --faint:#586069; --green:#27DBA2;
-    --green-dim:rgba(39,219,162,.12); --red:#F47067; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --txt:#F2F3F5; --dim:#9CA1A8; --faint:#61666E; --green:#27DBA2;
+    --line:rgba(255,255,255,.09); --line-soft:rgba(255,255,255,.06);
+    --glass:rgba(255,255,255,.035); --hover:rgba(255,255,255,.05);
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-       -webkit-font-smoothing:antialiased;min-height:100vh}
-  .wrap{max-width:1060px;margin:0 auto;padding:44px 28px 80px}
-  header{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
-  h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
-  h1 .glyph{margin-right:8px}
-  .sub{color:var(--dim);font-size:14px}
-  .local{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--faint);font-size:12.5px;font-family:var(--mono)}
-  .local .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
-  main{display:grid;grid-template-columns:1fr 320px;gap:20px;margin-top:28px;align-items:start}
+  html,body{min-height:100vh}
+  body{background:#08090B;color:var(--txt);-webkit-font-smoothing:antialiased;
+       font:14.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+       display:flex;align-items:center;justify-content:center;padding:52px 24px}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;
+       background:radial-gradient(700px 500px at 18% 8%,rgba(255,255,255,.075),transparent 62%),
+                  radial-gradient(900px 600px at 88% 100%,rgba(255,255,255,.05),transparent 62%),
+                  radial-gradient(520px 380px at 78% -6%,rgba(39,219,162,.055),transparent 65%)}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
+       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .window{position:relative;z-index:1;width:100%;max-width:1000px;border-radius:20px;
+       background:rgba(22,24,28,.58);backdrop-filter:blur(42px) saturate(150%);
+       -webkit-backdrop-filter:blur(42px) saturate(150%);
+       border:1px solid var(--line);
+       box-shadow:0 40px 100px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.4),
+                  inset 0 1px 0 rgba(255,255,255,.07);overflow:hidden}
+  header{display:flex;align-items:center;gap:12px;padding:18px 22px;
+       border-bottom:1px solid var(--line-soft)}
+  h1{font-size:16px;font-weight:650;letter-spacing:-.01em}
+  h1 .glyph{margin-right:9px;filter:grayscale(1) brightness(1.3)}
+  .sub{color:var(--faint);font-size:13px}
+  .local{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--faint);
+       font-size:11.5px;font-family:var(--mono);background:var(--glass);
+       border:1px solid var(--line-soft);border-radius:99px;padding:4px 12px}
+  .local .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+       box-shadow:0 0 10px rgba(39,219,162,.8)}
+  main{display:grid;grid-template-columns:1.55fr 1fr;min-height:430px}
   @media (max-width:860px){main{grid-template-columns:1fr}}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .panel h2{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
-            padding:14px 18px;border-bottom:1px solid var(--line)}
-  .row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line)}
-  .row:last-child{border-bottom:none}
-  .row:hover{background:var(--panel2)}
+  section.panel{padding:10px 10px 16px}
+  aside.panel{border-left:1px solid var(--line-soft);padding:10px 10px 16px;
+       background:rgba(255,255,255,.015)}
+  .panel h2{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+       color:var(--faint);padding:12px 14px 8px}
+  .panel h2 span{text-transform:none;letter-spacing:0;font-weight:500}
+  .row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;
+       transition:background .12s}
+  .row:hover{background:var(--hover)}
   .id{flex:1;min-width:0}
-  .name{font-family:var(--mono);font-size:14px;font-weight:600}
-  .meta{color:var(--dim);font-size:12.5px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .env{font-family:var(--mono);color:var(--green);font-size:12px}
-  .chip{font-family:var(--mono);font-size:11px;color:var(--green);background:var(--green-dim);
-        border:1px solid rgba(39,219,162,.25);border-radius:99px;padding:1px 8px}
-  .used{color:var(--faint);font-size:12px;white-space:nowrap}
-  .btn{border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;
-       padding:5px 11px;font-size:12.5px;cursor:pointer;transition:.12s}
-  .btn:hover{color:var(--txt);border-color:#2C333C}
-  .btn.danger:hover{color:var(--red);border-color:rgba(244,112,103,.4)}
-  .empty{padding:44px 24px;text-align:center;color:var(--dim);font-size:14px}
-  .empty b{color:var(--txt)}
-  form{padding:16px 18px;display:flex;flex-direction:column;gap:11px}
-  label{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
-  input{background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--txt);
-        padding:9px 11px;font-size:14px;width:100%;outline:none;transition:.12s}
-  input:focus{border-color:var(--green)}
+  .name{font-family:var(--mono);font-size:13.5px;font-weight:600}
+  .meta{color:var(--dim);font-size:12px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .env{font-family:var(--mono);color:var(--dim);font-size:11.5px}
+  .chip{font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--glass);
+       border:1px solid var(--line-soft);border-radius:99px;padding:1.5px 9px}
+  .used{color:var(--faint);font-size:11.5px;white-space:nowrap}
+  .btn{border:1px solid var(--line-soft);background:var(--glass);color:var(--dim);
+       border-radius:8px;padding:5px 11px;font-size:12px;cursor:pointer;transition:.12s;
+       backdrop-filter:blur(8px)}
+  .btn:hover{color:var(--txt);background:rgba(255,255,255,.09);border-color:var(--line)}
+  .btn.danger:hover{color:#F2F3F5;background:rgba(244,112,103,.18);border-color:rgba(244,112,103,.3)}
+  .empty{padding:52px 24px;text-align:center;color:var(--faint);font-size:13.5px;line-height:1.7}
+  .empty b{color:var(--dim)}
+  form{padding:6px 14px;display:flex;flex-direction:column;gap:10px}
+  label{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--faint);display:block;margin-bottom:5px}
+  input{background:rgba(0,0,0,.28);border:1px solid var(--line-soft);border-radius:9px;
+       color:var(--txt);padding:8.5px 11px;font-size:13.5px;width:100%;outline:none;transition:.15s}
+  input:focus{border-color:rgba(39,219,162,.55);box-shadow:0 0 0 3px rgba(39,219,162,.12)}
   input[type=password]{font-family:var(--mono);letter-spacing:.18em}
-  input::placeholder{color:var(--faint);letter-spacing:normal;font-family:-apple-system,sans-serif}
-  .save{background:var(--green);border:none;color:#06251B;font-weight:700;font-size:14px;
-        border-radius:8px;padding:10px;cursor:pointer;margin-top:4px}
-  .save:hover{filter:brightness(1.08)}
-  .note{color:var(--faint);font-size:12px;line-height:1.55;padding:0 18px 16px}
+  input::placeholder{color:#4A4F56;letter-spacing:normal;font-family:-apple-system,sans-serif}
+  .save{background:linear-gradient(180deg,#FFFFFF,#DFE2E6);border:none;color:#0A0B0D;
+       font-weight:650;font-size:13.5px;border-radius:9px;padding:10px;cursor:pointer;margin-top:5px;
+       box-shadow:0 1px 3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);transition:.12s}
+  .save:hover{filter:brightness(.96)}
+  .save:active{transform:translateY(1px)}
+  .note{color:var(--faint);font-size:11.5px;line-height:1.6;padding:12px 14px 6px}
   .note b{color:var(--dim)}
-  footer{margin-top:34px;color:var(--faint);font-size:12.5px;text-align:center;font-family:var(--mono)}
-  #toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(70px);
-         background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--green);
-         color:var(--txt);padding:11px 18px;border-radius:9px;font-size:13.5px;transition:.25s;opacity:0}
+  .bar{display:flex;align-items:center;gap:10px;padding:12px 20px;
+       border-top:1px solid var(--line-soft);color:var(--faint);
+       font-size:11.5px;font-family:var(--mono);background:rgba(0,0,0,.18)}
+  .bar .hints{margin-left:auto;display:flex;gap:14px;align-items:center;font-family:-apple-system,sans-serif;font-size:11.5px}
+  kbd{font-family:var(--mono);font-size:10.5px;color:var(--dim);background:var(--glass);
+       border:1px solid var(--line-soft);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:4px}
+  #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(70px);
+       background:rgba(28,30,34,.75);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+       border:1px solid var(--line);color:var(--txt);padding:11px 20px;border-radius:12px;
+       font-size:13px;transition:.25s;opacity:0;box-shadow:0 16px 48px rgba(0,0,0,.5);z-index:9}
   #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 </style></head><body>
-<div class="wrap">
+<div class="window">
   <header>
     <h1><span class="glyph">🕶️</span>blind-vault</h1>
     <span class="sub">secrets your agent can use — but never see</span>
@@ -167,7 +198,7 @@ PAGE = r"""<!doctype html>
   </header>
   <main>
     <section class="panel">
-      <h2>Pointers <span style="text-transform:none;letter-spacing:0">— the only thing Claude ever reads</span></h2>
+      <h2>Pointers <span>— the only thing Claude ever reads</span></h2>
       <div id="list"><div class="empty">loading…</div></div>
     </section>
     <aside class="panel">
@@ -182,11 +213,14 @@ PAGE = r"""<!doctype html>
         <button class="save" type="submit">Save to Keychain</button>
       </form>
       <p class="note"><b>Where the value goes:</b> this form → 127.0.0.1 → macOS Keychain.
-      It is never written to this page again, never returned by any API, and never enters
-      Claude's context. This dashboard has no “reveal” button — by design.</p>
+      Never written back to this page, never returned by any API, never in Claude's context.
+      No “reveal” button — by design.</p>
     </aside>
   </main>
-  <footer>Claude reads this table without a value column — because there isn't one.</footer>
+  <div class="bar">
+    Claude reads this table without a value column — because there isn't one.
+    <span class="hints"><span><kbd>↵</kbd>Save</span><span><kbd>ctrl·c</kbd>Stop server</span></span>
+  </div>
 </div>
 <div id="toast"></div>
 <script>
