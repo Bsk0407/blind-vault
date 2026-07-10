@@ -15,7 +15,11 @@ If the user pastes a secret value into the chat, it is already in the transcript
 
 ## Storing a secret
 
-Never ask the user to paste a value. Instead run:
+Never ask the user to paste a value. Two paths — prefer the dashboard when the user wants to manage several keys or seems uncomfortable with the CLI:
+
+**Dashboard (best UX):** run `vault ui` in the background and tell the user: "I've opened the vault dashboard at the printed 127.0.0.1 URL — add or manage keys there; I only ever see the pointer list." The form's password field goes straight to the Keychain. When they say done, `vault ls` to pick up the new pointers.
+
+**Inline (one-off):** run:
 
 ```bash
 vault add openai-api-key --service "OpenAI" --env OPENAI_API_KEY --allow "api.openai.com" --note "personal, pay-as-you-go"

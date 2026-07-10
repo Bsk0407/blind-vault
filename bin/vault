@@ -32,6 +32,7 @@ blind-vault — secrets your AI agent can use but never see
   vault use <name> -- <command...>    run command with the secret injected as env var
   vault copy <name>                   copy value to clipboard (auto-clears in 30s)
   vault ls                            list pointers (never values)
+  vault ui                            open the local dashboard (127.0.0.1, humans only)
   vault rm <name>                     delete from Keychain + manifest
 
 The value is NEVER printed by any subcommand. There is no `vault get`. That is the point.
@@ -184,6 +185,13 @@ for s in ss:
 PY
 }
 
+cmd_ui() {
+  need_manifest
+  local self_dir
+  self_dir=$(cd "$(dirname "$0")" && pwd -P)
+  exec python3 "$self_dir/../ui/vault_ui.py"
+}
+
 cmd_rm() {
   need_manifest
   [ $# -ge 1 ] || die "usage: vault rm <name>"
@@ -207,6 +215,7 @@ case "${1:-}" in
   use)   shift; cmd_use "$@";;
   copy)  shift; cmd_copy "$@";;
   ls|list) shift; cmd_ls "$@";;
+  ui)    shift; cmd_ui "$@";;
   rm|remove|delete) shift; cmd_rm "$@";;
   -h|--help|help|"") usage;;
   *) die "unknown command: $1 (see: vault help)";;

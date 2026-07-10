@@ -83,8 +83,21 @@ That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable,
 | `vault use <name> -- <cmd…>` | env-injects the value into the child process | the command's output — never the value |
 | `vault copy <name>` | clipboard, auto-clears in 30 s | nothing |
 | `vault ls` | pointer table | names, scopes, dates — no values |
+| `vault ui` | local dashboard for humans | it can start it — the page is for you |
 | `vault rm <name>` | delete from Keychain + manifest | confirmation |
 | ~~`vault get`~~ | **does not exist.** That's the point. | — |
+
+## For humans: the dashboard
+
+Claude works the CLI. You get a dashboard — `vault ui`:
+
+<div align="center"><img src="assets/ui.png" alt="blind-vault dashboard: pointer list with scope chips and last-used dates, add-a-secret form with a password field that goes straight to the Keychain" width="860" /></div>
+
+A local-only page (`127.0.0.1`, per-session token + Origin check against DNS rebinding, python3 stdlib — still zero dependencies). Add secrets in a proper form — the password field goes **form → loopback → Keychain**, never back to the page, never into any API response. List, scope chips, last-used dates, 30-second clipboard copy, delete.
+
+There is no "reveal" button. There will never be a "reveal" button.
+
+The two surfaces *are* the security model: the human-facing surface has a password field; the agent-facing surface has a table with no value column.
 
 ## The skill layer
 
