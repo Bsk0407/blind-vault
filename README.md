@@ -11,7 +11,7 @@ The last step you still do for your agent, done. Safely.
 <img src="https://img.shields.io/badge/dependencies-zero-27DBA2?style=flat-square" alt="zero dependencies" />
 <img src="https://img.shields.io/badge/license-MIT-white?style=flat-square" alt="MIT" />
 
-[Install](#install) · [How it works](#how-it-works) · [Commands](#commands) · [The skill layer](#the-skill-layer) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault)
+[Install](#install) · [How it works](#how-it-works) · [Commands](#commands) · [The skill layer](#the-skill-layer) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault) · [**The story**](STORY.md)
 
 <br/>
 
@@ -119,7 +119,7 @@ Two guards, because keystrokes are a loaded gun:
 
 ## Field notes — day one
 
-This isn't a concept repo; it ran a real day within hours of being written:
+This isn't a concept repo; it ran a real day within hours of being written — the full build log, including the bug that designed the scope matcher, the guard that refused its own demo, and one honest incident, is in **[STORY.md](STORY.md)**:
 
 - Registered a Gemini API key, GitHub and Google logins through the menu-bar app (`⌥⌘V`) — three pointers, zero values in any conversation.
 - Claude then called the Gemini API **blind** — `vault use gemini-api-key -- curl …` — and Gemini replied:
