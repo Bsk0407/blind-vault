@@ -84,6 +84,7 @@ That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable,
 | `vault copy <name>` | clipboard, auto-clears in 30 s | nothing |
 | `vault ls` | pointer table | names, scopes, dates — no values |
 | `vault ui` | local dashboard for humans | it can start it — the page is for you |
+| `vault type <name> --account --enter` | hands-free login: OS types ID → Tab → password → Return into the focused browser field | it fires the command; the keystrokes bypass it entirely |
 | `vault rm <name>` | delete from Keychain + manifest | confirmation |
 | ~~`vault get`~~ | **does not exist.** That's the point. | — |
 
@@ -98,6 +99,43 @@ A local-only page (`127.0.0.1`, per-session token + Origin check against DNS reb
 There is no "reveal" button. There will never be a "reveal" button.
 
 The two surfaces *are* the security model: the human-facing surface has a password field; the agent-facing surface has a table with no value column.
+
+## Hands-free login
+
+Logins are one entry: the **ID is pointer metadata** (the agent reads it, says it, types it freely) and the **password is the value** (Keychain, blind). Then:
+
+```bash
+vault type github-login --account --enter --delay 5
+```
+
+You click the username field once (GitHub even autofocuses it) — the OS types ID → Tab → password → Return as raw keystrokes. The value's path is Keychain → env → System Events. It never appears on screen, on the clipboard, or in the agent's context.
+
+Two guards, because keystrokes are a loaded gun:
+
+- **Frontmost-app guard** — if anything but a browser is focused when the delay ends, it aborts having typed *nothing*. A missed click can never spray your password into a chat box, an editor, or a search bar. (We watched this fire in real use on day one — it aborted with `frontmost app is 'Claude', not a browser`. Working as designed.)
+- Needs a one-time **Accessibility** grant for the host app; the error tells you where.
+
+`vault copy <name>` (clipboard, 30 s auto-clear) remains the manual fallback.
+
+## Field notes — day one
+
+This isn't a concept repo; it ran a real day within hours of being written:
+
+- Registered a Gemini API key, GitHub and Google logins through the menu-bar app (`⌥⌘V`) — three pointers, zero values in any conversation.
+- Claude then called the Gemini API **blind** — `vault use gemini-api-key -- curl …` — and Gemini replied:
+
+  > *"Yejun, Claude just called me, blindly using my API key. Congrats on that slick new `blind-vault` setup!"*
+
+- The agent's entire view of the vault, before and after:
+
+  ```
+  NAME            ENV               SERVICE   ALLOWED FOR                          LAST USED
+  GitHub-account  GITHUB_ACCOUNT    Github    github.com                           never
+  gemini-api-key  GEMINI_API_KEY    Gemini    generativelanguage.googleapis.com    2026-07-11
+  google_account  GOOGLE_ACCOUNT    Google    google.com                           never
+  ```
+
+  No value column. There isn't one.
 
 ## The skill layer
 
