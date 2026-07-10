@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# blind-vault — secrets your AI agent can USE but never SEE.
+#
+# Values live in the macOS Keychain. This directory only holds a pointer
+# manifest (names, services, scopes — never values). The agent consumes
+# secrets via environment-variable injection in a child process, so a value
+# never appears in chat context, tool output, logs, or shell history.
+set -euo pipefail
+
+VAULT_DIR="${BLINDVAULT_DIR:-$HOME/.blindvault}"
+MANIFEST="$VAULT_DIR/manifest.json"
+PREFIX="blindvault"
+
+die() { echo "vault: $*" >&2; exit 1; }
+need_manifest() { [ -f "$MANIFEST" ] || die "not initialized — run: vault init"; }
+
+usage() {
+  cat <<'EOF'
+blind-vault — secrets your AI agent can use but never see
+
+  vault init                          create the vault (~/.blindvault)
+  vault add <name> [flags]            store a secret via native macOS dialog
+      --service <label>                 what it belongs to (e.g. "OpenAI")
+      --account <id>                    username / account id (default: $USER)
+      --env <VAR>                       env var to inject as (default: NAME uppercased)
+      --allow <s1,s2>                   scope: targets the command must mention,
+                                        boundary-matched (domains or binary names,
+                                        e.g. "api.openai.com,curl")
+      --note <text>                     free-form note
+      --from-stdin                      read value from stdin (automation only —
+                                        the value is visible to the calling process)
+  vault use <name> -- <command...>    run command with the secret injected as env var
+  vault copy <name>                   copy value to clipboard (auto-clears in 30s)
+  vault ls                            list pointers (never values)
+  vault rm <name>                     delete from Keychain + manifest
+
+The value is NEVER printed by any subcommand. There is no `vault get`. That is the point.
+EOF
+}
+
+cmd_init() {
+  mkdir -p "$VAULT_DIR"
+  chmod 700 "$VAULT_DIR"
+  if [ ! -f "$MANIFEST" ]; then
+    printf '{\n  "secrets": []\n}\n' > "$MANIFEST"
+  fi
+  chmod 600 "$MANIFEST"
+  echo "vault ready at $VAULT_DIR (pointers only — values live in the macOS Keychain)"
+}
+
+cmd_add() {
+  need_manifest
+  [ $# -ge 1 ] || die "usage: vault add <name> [--service ...] [--account ...] [--env VAR] [--allow s1,s2] [--note ...]"
+  local name="$1"; shift
+  case "$name" in (*[!a-zA-Z0-9._-]*) die "name must be [a-zA-Z0-9._-]";; esac
+  local service="" account="${USER:-unknown}" envvar="" allow="" note="" from_stdin=0
+  while [ $# -gt 0 ]; do case "$1" in
+    --service) service="$2"; shift 2;;
+    --account) account="$2"; shift 2;;
+    --env)     envvar="$2";  shift 2;;
+    --allow)   allow="$2";   shift 2;;
+    --note)    note="$2";    shift 2;;
+    --from-stdin) from_stdin=1; shift;;
+    *) die "unknown flag: $1";;
+  esac; done
+  [ -n "$envvar" ] || envvar=$(printf '%s' "$name" | tr 'a-z.-' 'A-Z__')
+
+  local value
+  if [ "$from_stdin" = 1 ]; then
+    IFS= read -r value || true
+  else
+    # Native macOS dialog with hidden input: keyboard -> shell var -> Keychain.
+    # The value never appears in chat, tool output, or logs.
+    value=$(osascript \
+      -e "display dialog \"Secret value for '$name'\n\nGoes straight into the macOS Keychain — the agent never sees it.\" default answer \"\" with hidden answer with title \"Blind Vault\" buttons {\"Cancel\", \"Save\"} default button \"Save\"" \
+      -e 'text returned of result' 2>/dev/null) || die "cancelled"
+  fi
+  [ -n "$value" ] || die "empty value — nothing stored"
+
+  security add-generic-password -U -a "$account" -s "$PREFIX.$name" -j "managed by blind-vault" -w "$value" \
+    || die "keychain write failed"
+  unset value
+
+  python3 - "$MANIFEST" "$name" "$service" "$account" "$envvar" "$allow" "$note" <<'PY'
+import json, sys, datetime
+mf, name, service, account, envvar, allow, note = sys.argv[1:8]
+d = json.load(open(mf))
+d["secrets"] = [s for s in d["secrets"] if s["name"] != name]
+d["secrets"].append({
+    "name": name, "service": service, "account": account, "env": envvar,
+    "allowed_for": [a.strip() for a in allow.split(",") if a.strip()],
+    "note": note,
+    "created": datetime.date.today().isoformat(),
+    "last_used": None,
+})
+d["secrets"].sort(key=lambda s: s["name"])
+json.dump(d, open(mf, "w"), indent=2)
+PY
+  echo "stored '$name' in Keychain (injects as \$$envvar). The value never entered this conversation."
+}
+
+cmd_use() {
+  need_manifest
+  [ $# -ge 1 ] || die "usage: vault use <name> -- <command...>"
+  local name="$1"; shift
+  [ "${1:-}" = "--" ] || die "usage: vault use <name> -- <command...>"
+  shift
+  [ $# -gt 0 ] || die "no command given after --"
+
+  local meta envvar allow
+  meta=$(python3 - "$MANIFEST" "$name" <<'PY'
+import json, sys
+mf, name = sys.argv[1:3]
+d = json.load(open(mf))
+for s in d["secrets"]:
+    if s["name"] == name:
+        print(s["env"])
+        print(",".join(s.get("allowed_for") or []))
+        break
+else:
+    sys.exit(3)
+PY
+  ) || die "no secret named '$name' — see: vault ls"
+  envvar=$(printf '%s\n' "$meta" | sed -n 1p)
+  allow=$(printf '%s\n' "$meta" | sed -n 2p)
+
+  # Scope binding: the command line must mention at least one allowed target.
+  # This is the prompt-injection tripwire — a hijacked agent trying to send a
+  # secret somewhere new fails here, loudly.
+  if [ -n "$allow" ] && [ "${BLINDVAULT_FORCE:-}" != "1" ]; then
+    local cmdline="$*" ok=0 a esc pats
+    IFS=',' read -ra pats <<< "$allow"
+    for a in "${pats[@]}"; do
+      # Boundary-aware match: "sh" must not match "should", and
+      # "openai.com" must not match "openai.com.evil.io" — but a leading dot
+      # is a boundary so "openai.com" still matches subdomain "api.openai.com".
+      esc=$(printf '%s' "$a" | sed 's/[^A-Za-z0-9_]/\\&/g')
+      if printf '%s' "$cmdline" | grep -Eq "(^|[^A-Za-z0-9_-])${esc}([^A-Za-z0-9_.-]|\$)"; then ok=1; fi
+    done
+    [ "$ok" = 1 ] || die "SCOPE BLOCK: '$name' is scoped to [$allow] but the command mentions none of them.
+If this is intentional, a HUMAN can override with BLINDVAULT_FORCE=1. Agents: stop and ask."
+  fi
+
+  local value
+  value=$(security find-generic-password -w -s "$PREFIX.$name") || die "keychain lookup failed for '$name'"
+
+  python3 - "$MANIFEST" "$name" <<'PY'
+import json, sys, datetime
+mf, name = sys.argv[1:3]
+d = json.load(open(mf))
+for s in d["secrets"]:
+    if s["name"] == name:
+        s["last_used"] = datetime.date.today().isoformat()
+json.dump(d, open(mf, "w"), indent=2)
+PY
+
+  exec env "$envvar=$value" "$@"
+}
+
+cmd_copy() {
+  need_manifest
+  [ $# -ge 1 ] || die "usage: vault copy <name>"
+  local name="$1"
+  security find-generic-password -w -s "$PREFIX.$name" | tr -d '\n' | pbcopy \
+    || die "keychain lookup failed for '$name'"
+  echo "'$name' copied to clipboard — auto-clears in 30 seconds"
+  ( sleep 30; pbcopy < /dev/null ) >/dev/null 2>&1 &
+}
+
+cmd_ls() {
+  need_manifest
+  python3 - "$MANIFEST" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+ss = d["secrets"]
+if not ss:
+    print("vault is empty — add one:  vault add <name> --service <svc> --allow <domain>")
+    sys.exit()
+w = max(max(len(s["name"]) for s in ss), 4)
+print(f"{'NAME'.ljust(w)}  {'ENV'.ljust(24)}  {'SERVICE'.ljust(14)}  {'ALLOWED FOR'.ljust(26)}  LAST USED")
+for s in ss:
+    allowed = ",".join(s.get("allowed_for") or []) or "-"
+    print(f"{s['name'].ljust(w)}  {s['env'][:24].ljust(24)}  {(s.get('service') or '-')[:14].ljust(14)}  {allowed[:26].ljust(26)}  {s.get('last_used') or 'never'}")
+PY
+}
+
+cmd_rm() {
+  need_manifest
+  [ $# -ge 1 ] || die "usage: vault rm <name>"
+  local name="$1"
+  security delete-generic-password -s "$PREFIX.$name" >/dev/null 2>&1 || true
+  python3 - "$MANIFEST" "$name" <<'PY'
+import json, sys
+mf, name = sys.argv[1:3]
+d = json.load(open(mf))
+before = len(d["secrets"])
+d["secrets"] = [s for s in d["secrets"] if s["name"] != name]
+json.dump(d, open(mf, "w"), indent=2)
+sys.exit(0 if len(d["secrets"]) < before else 4)
+PY
+  echo "removed '$name' (Keychain + manifest)"
+}
+
+case "${1:-}" in
+  init)  shift; cmd_init "$@";;
+  add)   shift; cmd_add "$@";;
+  use)   shift; cmd_use "$@";;
+  copy)  shift; cmd_copy "$@";;
+  ls|list) shift; cmd_ls "$@";;
+  rm|remove|delete) shift; cmd_rm "$@";;
+  -h|--help|help|"") usage;;
+  *) die "unknown command: $1 (see: vault help)";;
+esac
