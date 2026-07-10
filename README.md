@@ -88,15 +88,17 @@ That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable,
 | `vault rm <name>` | delete from Keychain + manifest | confirmation |
 | ~~`vault get`~~ | **does not exist.** That's the point. | — |
 
-## For humans: the dashboard
+## For humans: the app
 
-Claude works the CLI. You get a dashboard — `vault ui`:
+Claude works the CLI. You get a native macOS menu-bar app — **`⌥⌘V`** from anywhere:
 
-<div align="center"><img src="assets/ui.png" alt="blind-vault dashboard: pointer list with scope chips and last-used dates, add-a-secret form with a password field that goes straight to the Keychain" width="860" /></div>
+<div align="center"><img src="assets/app.png" alt="Blind Vault.app: frameless glass window with real macOS vibrancy — pointer list with scope chips, ID chips and last-used dates; add-a-secret form whose password field goes straight to the Keychain" width="880" /></div>
 
-A local-only page (`127.0.0.1`, per-session token + Origin check against DNS rebinding, python3 stdlib — still zero dependencies). Add secrets in a proper form — the password field goes **form → loopback → Keychain**, never back to the page, never into any API response. List, scope chips, last-used dates, 30-second clipboard copy, delete.
+Tauri 2, no dock icon, a sunglasses icon in the menu bar, frameless window with real NSVisualEffectView vibrancy, `esc` to hide. The Rust side calls `security`/`pbcopy` in-process — no server, no port, no token to protect. Build it with `cd app && npx @tauri-apps/cli build`, drop it in `/Applications`, add it to Login Items and forget it's there.
 
-There is no "reveal" button. There will never be a "reveal" button.
+Don't want to build a native app? `vault ui` serves the same dashboard as a local-only web page (`127.0.0.1`, per-session token + Origin check against DNS rebinding, python3 stdlib).
+
+Either way: add secrets in a proper form — the password field goes **form → Keychain**, never rendered back, never in any response. There is no "reveal" button. There will never be a "reveal" button.
 
 The two surfaces *are* the security model: the human-facing surface has a password field; the agent-facing surface has a table with no value column.
 
