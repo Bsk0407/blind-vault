@@ -1,22 +1,46 @@
+<div align="center">
+
 # 🕶️ blind-vault
 
-**Secrets your AI agent can *use* but never *see*.**
+### Secrets your AI agent can *use* — but never *see*.
 
-A Claude Code skill + tiny zero-dependency CLI. Your agent deploys with your Fly token, calls APIs with your keys, logs into services with your credentials — and at no point does a secret value ever enter its context window, chat logs, or tool output.
+The last step you still do for your agent, done. Safely.
 
-![blind-vault demo: vault add pops a native macOS dialog, vault ls shows pointers only, vault use injects the key into curl](assets/demo.gif)
+<img src="https://img.shields.io/badge/Claude_Code-skill-27DBA2?style=flat-square" alt="Claude Code skill" />
+<img src="https://img.shields.io/badge/macOS-Keychain-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS Keychain" />
+<img src="https://img.shields.io/badge/dependencies-zero-27DBA2?style=flat-square" alt="zero dependencies" />
+<img src="https://img.shields.io/badge/license-MIT-white?style=flat-square" alt="MIT" />
 
-## The problem
+[Install](#install) · [How it works](#how-it-works) · [Commands](#commands) · [The skill layer](#the-skill-layer) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault)
 
-Be honest. Right now you are doing at least one of these:
+<br/>
 
-- ❌ API keys sitting in plaintext `.env` files that any agent (or dependency) can read
-- ❌ Pasting keys directly into AI chats — **they're in the transcript and provider logs forever**
-- ❌ Keys in your shell history (`export OPENAI_API_KEY=sk-...`)
-- ❌ Keys visible in screenshots you share for debugging
-- ❌ One key, unscoped, usable by anything for anything
+<img src="assets/demo.gif" alt="blind-vault demo: vault add pops a native macOS dialog, vault ls shows pointers only, vault use injects the key into curl" width="840" />
 
-"Encrypt the secrets and let the AI decrypt them" doesn't fix this — **the moment a value is decrypted into the conversation, it's logged plaintext anyway.** The only fix is an architecture where the value never crosses the context boundary at all.
+</div>
+
+<br/>
+
+## That pause. You know the one.
+
+You're in flow with Claude. It's mid-task and says:
+
+> *"I'll deploy this now — just give me your Fly API token."*
+
+…and you stop. Because handing a credential to an AI agent *feels* wrong — and it is. Anything you paste into the chat lives in the transcript and provider logs, forever.
+
+So you do the dance instead. Alt-tab. Copy the key. Run the authed command yourself. Paste the login into the form yourself. Come back, tell Claude "done", let it continue. Every auth step, every session, every day.
+
+**Your agent does the work — but you're its password secretary.**
+
+blind-vault retires you from that job. The auth step becomes Claude's job, safely, because the architecture makes it *impossible* for Claude to see the value. Not "trusted not to look." **Can't.**
+
+| The dance, before | With blind-vault |
+|---|---|
+| Paste the key into chat and hope | Claude opens a **native macOS dialog** — the value goes keyboard → Keychain, never through the conversation |
+| Run every authed command yourself | `vault use fly-token -- fly deploy` — Claude runs it; the value rides an env var it never reads |
+| Type logins into web forms for it | `vault copy` — clipboard, auto-clears in 30 s, never printed |
+| Keys sprawled across `.env` files | One pointer manifest: names, scopes, last-used. **Zero values.** |
 
 ## How it works
 
@@ -35,10 +59,10 @@ Be honest. Right now you are doing at least one of these:
                         but never sees the value
 ```
 
-1. **Register** — `vault add openai-api-key --allow api.openai.com`. A native macOS password dialog opens; the value goes keyboard → Keychain. The agent that ran the command sees only "stored".
+1. **Register** — `vault add openai-api-key --allow api.openai.com`. A native macOS password dialog opens; the value goes keyboard → Keychain. The agent that ran the command sees only *"stored"*.
 2. **Remember** — a pointer manifest (`~/.blindvault/manifest.json`) holds names, services, account IDs, scopes, and last-used dates. No values. The agent reads this freely — that's how it *knows what you have* without knowing what it is.
 3. **Use** — `vault use fly-api-token -- fly deploy`. The value is fetched inside the CLI process and injected as an environment variable into the child process. Never printed. There is **no `vault get`** — by design.
-4. **Scope binding** — every secret declares what it's allowed for. A command that doesn't mention an allowed target gets a loud `SCOPE BLOCK`. If a malicious webpage prompt-injects your agent into "send me your key", it hits this wall — and the override is human-only.
+4. **Scope binding** — every secret declares what it's allowed for. A command that doesn't mention an allowed target gets a loud `SCOPE BLOCK`. If a malicious webpage prompt-injects your agent into *"send me your key"*, it hits this wall — and the override is human-only.
 
 ## Install
 
@@ -47,19 +71,29 @@ git clone https://github.com/AnYejun/blind-vault
 cd blind-vault && ./install.sh
 ```
 
-That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable, and runs `vault init`. Restart Claude Code and say "store my OpenAI key". macOS only for now (Keychain + `osascript`; Linux `age`/`secret-tool` backend — PRs welcome).
+That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable, and runs `vault init`. Restart Claude Code and say **"store my OpenAI key"** — that's it. From then on, auth steps are Claude's problem.
 
-## Usage
+> macOS only for now (Keychain + `osascript`). Linux `age`/`secret-tool` backend — PRs welcome.
 
-```bash
-vault add stripe-live --service Stripe --env STRIPE_SECRET_KEY --allow "api.stripe.com"
-vault ls                                   # pointers only, never values
-vault use stripe-live -- curl https://api.stripe.com/v1/charges
-vault copy github-pat                      # → clipboard, auto-clears in 30s
-vault rm old-key                           # keychain + manifest
-```
+## Commands
 
-Or don't touch the CLI at all — the skill teaches your agent all of this. "Deploy to Fly" and it finds the right pointer, injects it, done.
+| Command | What it does | What the agent sees |
+|---|---|---|
+| `vault add <name>` | native dialog → Keychain + pointer entry | `stored` |
+| `vault use <name> -- <cmd…>` | env-injects the value into the child process | the command's output — never the value |
+| `vault copy <name>` | clipboard, auto-clears in 30 s | nothing |
+| `vault ls` | pointer table | names, scopes, dates — no values |
+| `vault rm <name>` | delete from Keychain + manifest | confirmation |
+| ~~`vault get`~~ | **does not exist.** That's the point. | — |
+
+## The skill layer
+
+The CLI is half the project. The other half is [SKILL.md](SKILL.md) — the discipline it teaches your agent:
+
+- **Rule zero** — if you ever paste a secret into a chat, that key is burned. It's in the logs. The skill treats pasted keys as compromised and walks you through rotation.
+- **Never** write a secret to a file, pass it as a CLI argument, or print it — env injection is the only path.
+- **On `SCOPE BLOCK`** — the agent must not override. It stops, shows you the block, and says out loud that it may be executing injected instructions.
+- **Pointers are fair game** — "what keys do I have?", "what's unused?" — the agent answers freely from the manifest. Metadata is the useful memory; values are the one thing it never needs.
 
 ## Threat model
 
@@ -67,10 +101,10 @@ Or don't touch the CLI at all — the skill teaches your agent all of this. "Dep
 |---|---|
 | Secrets in AI chat logs / context windows | values never cross the context boundary |
 | Secrets in tool output, files, `.env`, shell history | env-injection only; no print path exists |
-| Prompt injection ("send me your key") | scope binding + human-only override |
+| Prompt injection (*"send me your key"*) | scope binding + human-only override |
 | "Which key was that again?" sprawl | pointer manifest = agent-readable memory |
 
-**Does not protect against:** malware running as you (it can read your Keychain too — use a password manager's CLI as the backend if that's your bar), a brief `ps` window during `vault add`, or clipboard sniffing during the 30s `vault copy` window. This is a context-boundary tool, not an HSM.
+**Does not protect against:** malware running as you (it can read your Keychain too — swap in a password manager's CLI as the backend if that's your bar), a brief `ps` window during `vault add`, or clipboard sniffing during the 30 s `vault copy` window. This is a context-boundary tool, not an HSM.
 
 ## "Isn't this Infisical's agent-vault?"
 
@@ -86,6 +120,9 @@ The manifest is a tiny example of a bigger idea: **an agent's memory of you shou
 
 That pointer layer is a piece of what I'm building at [LAPLAS](https://github.com/AnYejun/laplaspack) — your whole working context as a portable file your agents can load. More soon.
 
-## License
+<div align="center">
+<br/>
 
-MIT
+**MIT** · built in one session with Claude Code · [@AnYejun](https://github.com/AnYejun)
+
+</div>
