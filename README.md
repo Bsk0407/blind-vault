@@ -11,7 +11,7 @@ The last step you still do for your agent, done. Safely.
 <img src="https://img.shields.io/badge/dependencies-zero-27DBA2?style=flat-square" alt="zero dependencies" />
 <img src="https://img.shields.io/badge/license-MIT-white?style=flat-square" alt="MIT" />
 
-[Install](#install) · [How it works](#how-it-works) · [Commands](#commands) · [The skill layer](#the-skill-layer) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault) · [**The story**](STORY.md)
+[Install](#install) · [How it works](#how-it-works) · [Why "can't" means can't](#why-cant-actually-means-cant) · [Commands](#commands) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault) · [**The story**](STORY.md)
 
 <br/>
 
@@ -63,6 +63,25 @@ blind-vault retires you from that job. The auth step becomes Claude's job, safel
 2. **Remember** — a pointer manifest (`~/.blindvault/manifest.json`) holds names, services, account IDs, scopes, and last-used dates. No values. The agent reads this freely — that's how it *knows what you have* without knowing what it is.
 3. **Use** — `vault use fly-api-token -- fly deploy`. The value is fetched inside the CLI process and injected as an environment variable into the child process. Never printed. There is **no `vault get`** — by design.
 4. **Scope binding** — every secret declares what it's allowed for. A command that doesn't mention an allowed target gets a loud `SCOPE BLOCK`. If a malicious webpage prompt-injects your agent into *"send me your key"*, it hits this wall — and the override is human-only.
+
+## Why "can't" actually means can't
+
+People imagine an AI living "inside" your computer, free to peek at anything. The reality is almost comically constrained: **an LLM has exactly one sense organ — the text that enters its context.** No eyes, no hands, no debugger. It's a pen pal that experiences the universe entirely by mail. If a value never becomes tokens in its input, that value *does not exist* in its universe.
+
+So trace the value's actual route:
+
+```
+Keychain (the OS's encrypted safe)
+  → env-var table (a note the kernel passes parent → child at exec)
+    → curl / fly / whatever (opens the note, makes the call)
+      → what returns to the agent: that process's OUTPUT TEXT. nothing else.
+```
+
+Process isolation — the wall that fifty years of OS security is built on — means the agent composes the *sentence* ("take the key from the safe, tuck it into that process") but the value flows through plumbing that routes around it. This is the difference between **"won't look"** (a promise — breakable by bugs, logs, or a well-crafted prompt injection) and **"can't look"** (a missing channel — like asking a radio to show you a movie).
+
+One honest window remains: a child process *could* print the value, and printed text rides the mail back. Hence two curtains — scope binding blocks commands that don't mention the secret's allowed targets, and there is no `vault get` to be sweet-talked into running. You can't press a button that was never built.
+
+It's not a trust problem. It's a wiring diagram.
 
 ## Install
 
