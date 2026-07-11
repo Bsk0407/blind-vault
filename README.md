@@ -79,7 +79,7 @@ Keychain (the OS's encrypted safe)
 
 Process isolation — the wall that fifty years of OS security is built on — means the agent composes the *sentence* ("take the key from the safe, tuck it into that process") but the value flows through plumbing that routes around it. This is the difference between **"won't look"** (a promise — breakable by bugs, logs, or a well-crafted prompt injection) and **"can't look"** (a missing channel — like asking a radio to show you a movie).
 
-One honest window remains: a child process *could* print the value, and printed text rides the mail back. Hence two curtains — scope binding blocks commands that don't mention the secret's allowed targets, and there is no `vault get` to be sweet-talked into running. You can't press a button that was never built.
+One honest window remains: a child process *could* print the value (`curl -v`, a stack trace, a debug log), and printed text rides the mail back. Hence three curtains — scope binding blocks commands that don't mention the secret's allowed targets; there is no `vault get` to be sweet-talked into running; and `vault use` **scrubs the child's output**, replacing any exact occurrence of the value with `[REDACTED:<name>]` before anyone reads it. You can't press a button that was never built, and even a leaky process leaks only a placeholder.
 
 It's not a trust problem. It's a wiring diagram.
 
@@ -174,6 +174,7 @@ The CLI is half the project. The other half is [SKILL.md](SKILL.md) — the disc
 | Secrets in AI chat logs / context windows | values never cross the context boundary |
 | Secrets in tool output, files, `.env`, shell history | env-injection only; no print path exists |
 | Prompt injection (*"send me your key"*) | scope binding + human-only override |
+| A leaky child process (`curl -v`, stack traces, debug logs) | output scrubbing: the value becomes `[REDACTED:<name>]` |
 | "Which key was that again?" sprawl | pointer manifest = agent-readable memory |
 
 **Does not protect against:** malware running as you (it can read your Keychain too — swap in a password manager's CLI as the backend if that's your bar), a brief `ps` window during `vault add`, or clipboard sniffing during the 30 s `vault copy` window. This is a context-boundary tool, not an HSM.

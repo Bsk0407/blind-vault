@@ -29,7 +29,10 @@ blind-vault — secrets your AI agent can use but never see
       --note <text>                     free-form note
       --from-stdin                      read value from stdin (automation only —
                                         the value is visible to the calling process)
-  vault use <name> -- <command...>    run command with the secret injected as env var
+  vault use <name> -- <command...>    run command with the secret injected as env var;
+                                      output is scrubbed — if the process echoes the
+                                      value it becomes [REDACTED:<name>]
+      --no-redact                       raw exec (separate streams/TTY, no scrubbing)
   vault copy <name>                   copy value to clipboard (auto-clears in 30s)
   vault type <name> [flags]           type into the focused browser field (OS keystrokes)
       --account                         type the stored ID first, then Tab
@@ -106,9 +109,14 @@ PY
 
 cmd_use() {
   need_manifest
-  [ $# -ge 1 ] || die "usage: vault use <name> -- <command...>"
+  [ $# -ge 1 ] || die "usage: vault use <name> [--no-redact] -- <command...>"
   local name="$1"; shift
-  [ "${1:-}" = "--" ] || die "usage: vault use <name> -- <command...>"
+  local no_redact="${BLINDVAULT_NO_REDACT:-0}"
+  while [ $# -gt 0 ] && [ "$1" != "--" ]; do case "$1" in
+    --no-redact) no_redact=1; shift;;
+    *) die "usage: vault use <name> [--no-redact] -- <command...>";;
+  esac; done
+  [ "${1:-}" = "--" ] || die "usage: vault use <name> [--no-redact] -- <command...>"
   shift
   [ $# -gt 0 ] || die "no command given after --"
 
@@ -159,7 +167,27 @@ for s in d["secrets"]:
 json.dump(d, open(mf, "w"), indent=2)
 PY
 
-  exec env "$envvar=$value" "$@"
+  if [ "$no_redact" = 1 ]; then
+    exec env "$envvar=$value" "$@"
+  fi
+
+  # Defense in depth: if the child prints the value (curl -v, stack traces,
+  # debug logs), scrub it before it reaches whoever is reading the output.
+  # Note: stdout/stderr are merged under redaction; --no-redact restores
+  # exec semantics (separate streams, TTY) for interactive tools.
+  env "$envvar=$value" "$@" 2>&1 | \
+    BLINDVAULT_VAL="$value" BLINDVAULT_NAME="$name" python3 -c '
+import os, sys
+v = os.environ.pop("BLINDVAULT_VAL", "").encode()
+r = ("[REDACTED:" + os.environ.pop("BLINDVAULT_NAME", "secret") + "]").encode()
+i, o = sys.stdin.buffer, sys.stdout.buffer
+while True:
+    line = i.readline()
+    if not line:
+        break
+    o.write(line.replace(v, r) if v else line)
+    o.flush()
+'
 }
 
 cmd_copy() {

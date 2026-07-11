@@ -40,7 +40,8 @@ vault use openai-api-key -- curl https://api.openai.com/v1/models
 
 The value rides an environment variable directly into the child process. Hard rules:
 
-- **Never** run `security find-generic-password` yourself, or any other command that would print a value.
+- **Never** run `security find-generic-password` yourself, or any other command that would print a value. `vault use` scrubs child output (echoed values become `[REDACTED:<name>]`) — treat that as a safety net, not permission: still never compose commands that print values, never add `-v`/debug flags to authed calls, and use `--no-redact` only for interactive TTY tools.
+- If you ever see `[REDACTED:...]` in output, the child process leaked its credential — tell the user and suggest checking that tool's verbosity/logging settings.
 - **Never** write a secret to a file (including `.env`) — if a tool absolutely requires a file, ask the user to create it themselves and explain why.
 - **Never** pass a secret as a command-line argument to the target program; env injection only.
 - There is no `vault get`. Do not build one, do not work around it with `env | grep`.
