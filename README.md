@@ -187,6 +187,8 @@ blind-vault is the local-first version for one person and one Mac: ~200 lines of
 
 Running remote agent fleets or untrusted sandboxes? Use agent-vault. It's good.
 
+Kindred local-first projects worth knowing: [clawvault](https://github.com/KHAEntertainment/clawvault) (OS-keychain secrets skill for OpenClaw) and [mcp-secrets-vault](https://github.com/RachidChabane/mcp-secrets-vault) (MCP mini-vault). Same instinct — values stay out of AI context. blind-vault's focus is the layers above storage: agent discipline (rule zero, scope blocks, output scrubbing) and hands-free login.
+
 ## Why pointers are the interesting part
 
 The manifest is a tiny example of a bigger idea: **an agent's memory of you should be a structured, owned, inspectable file — where sensitive values are references, not contents.** The agent remembers *that* you have a Stripe key, *what* it's for, *when* it was last used. That's the useful memory. The value is the one thing it never needs.
