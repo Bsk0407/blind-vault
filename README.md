@@ -8,14 +8,14 @@ The last step you still do for your agent, done. Safely.
 
 <img src="https://img.shields.io/badge/Claude_Code-skill-27DBA2?style=flat-square" alt="Claude Code skill" />
 <img src="https://img.shields.io/badge/macOS-Keychain-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS Keychain" />
-<img src="https://img.shields.io/badge/dependencies-zero-27DBA2?style=flat-square" alt="zero dependencies" />
+<img src="https://img.shields.io/badge/Windows-Credential_Manager-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Windows Credential Manager" />
 <img src="https://img.shields.io/badge/license-MIT-white?style=flat-square" alt="MIT" />
 
 [Install](#install) · [How it works](#how-it-works) · [Why "can't" means can't](#why-cant-actually-means-cant) · [Commands](#commands) · [Threat model](#threat-model) · [FAQ](#isnt-this-infisicals-agent-vault) · [**The story**](STORY.md)
 
 <br/>
 
-<img src="assets/demo.gif" alt="blind-vault demo: vault add pops a native macOS dialog, vault ls shows pointers only, vault use injects the key into curl" width="840" />
+<img src="assets/demo.gif" alt="blind-vault demo: vault add pops a native password dialog, vault ls shows pointers only, vault use injects the key into curl" width="840" />
 
 </div>
 
@@ -37,7 +37,7 @@ blind-vault retires you from that job. The auth step becomes Claude's job, safel
 
 | The dance, before | With blind-vault |
 |---|---|
-| Paste the key into chat and hope | Claude opens a **native macOS dialog** — the value goes keyboard → Keychain, never through the conversation |
+| Paste the key into chat and hope | Claude opens a **native password dialog** — the value goes keyboard → Keychain or Credential Manager, never through the conversation |
 | Run every authed command yourself | `vault use fly-token -- fly deploy` — Claude runs it; the value rides an env var it never reads |
 | Type logins into web forms for it | `vault copy` — clipboard, auto-clears in 30 s, never printed |
 | Keys sprawled across `.env` files | One pointer manifest: names, scopes, last-used. **Zero values.** |
@@ -45,9 +45,9 @@ blind-vault retires you from that job. The auth step becomes Claude's job, safel
 ## How it works
 
 ```
- REGISTER            ┌─────────────────────┐
- native macOS dialog │   macOS Keychain     │   values live here
- (hidden input) ────▶│   (encrypted, yours) │◀── never leave the OS
+ REGISTER            ┌────────────────────────┐
+ native OS dialog    │ OS credential store    │   values live here
+ (hidden input) ────▶│ Keychain / WinCred     │◀── never enter the manifest
                      └──────────┬──────────┘
                                 │ env-var injection, child process only
                                 ▼
@@ -59,7 +59,7 @@ blind-vault retires you from that job. The auth step becomes Claude's job, safel
                         but never sees the value
 ```
 
-1. **Register** — `vault add openai-api-key --allow api.openai.com`. A native macOS password dialog opens; the value goes keyboard → Keychain. The agent that ran the command sees only *"stored"*.
+1. **Register** — `vault add openai-api-key --allow api.openai.com`. A native masked password dialog opens; the value goes keyboard → macOS Keychain or Windows Credential Manager. The agent that ran the command sees only *"stored"*.
 2. **Remember** — a pointer manifest (`~/.blindvault/manifest.json`) holds names, services, account IDs, scopes, and last-used dates. No values. The agent reads this freely — that's how it *knows what you have* without knowing what it is.
 3. **Use** — `vault use fly-api-token -- fly deploy`. The value is fetched inside the CLI process and injected as an environment variable into the child process. Never printed. There is **no `vault get`** — by design.
 4. **Scope binding** — every secret declares what it's allowed for. A command that doesn't mention an allowed target gets a loud `SCOPE BLOCK`. If a malicious webpage prompt-injects your agent into *"send me your key"*, it hits this wall — and the override is human-only.
@@ -71,7 +71,7 @@ People imagine an AI living "inside" your computer, free to peek at anything. Th
 So trace the value's actual route:
 
 ```
-Keychain (the OS's encrypted safe)
+OS credential store (macOS Keychain or Windows Credential Manager)
   → env-var table (a note the kernel passes parent → child at exec)
     → curl / fly / whatever (opens the note, makes the call)
       → what returns to the agent: that process's OUTPUT TEXT. nothing else.
@@ -85,56 +85,69 @@ It's not a trust problem. It's a wiring diagram.
 
 ## Install
 
+### macOS
+
 ```bash
 git clone https://github.com/AnYejun/blind-vault
 cd blind-vault && ./install.sh
 ```
 
-That symlinks the skill into `~/.claude/skills/vault`, makes the CLI executable, and runs `vault init`. Restart Claude Code and say **"store my OpenAI key"** — that's it. From then on, auth steps are Claude's problem.
+### Windows (native PowerShell, not WSL)
 
-> macOS only for now (Keychain + `osascript`). Linux `age`/`secret-tool` backend — PRs welcome.
+```powershell
+git clone https://github.com/AnYejun/blind-vault
+cd blind-vault
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The installer links the skill into `~/.claude/skills/vault` and runs `vault init`. Add the printed `bin` directory to `PATH` (or rerun with `-AddToPath`) and use `vault.cmd`. Restart your agent and say **"store my OpenAI key"** — that's it.
+
+macOS uses Keychain and Windows uses Generic credentials in Credential Manager. The Windows backend requires Windows PowerShell 5.1+ on native Windows; WSL is intentionally rejected. Linux `age`/`secret-tool` backend — PRs welcome.
 
 ## Commands
 
 | Command | What it does | What the agent sees |
 |---|---|---|
-| `vault add <name>` | native dialog → Keychain + pointer entry | `stored` |
+| `vault add <name>` | native dialog → OS credential store + pointer entry | `stored` |
 | `vault use <name> -- <cmd…>` | env-injects the value into the child process | the command's output — never the value |
 | `vault copy <name>` | clipboard, auto-clears in 30 s | nothing |
 | `vault ls` | pointer table | names, scopes, dates — no values |
 | `vault ui` | local dashboard for humans | it can start it — the page is for you |
 | `vault type <name> --account --enter` | hands-free login: OS types ID → Tab → password → Return into the focused browser field | it fires the command; the keystrokes bypass it entirely |
-| `vault rm <name>` | delete from Keychain + manifest | confirmation |
+| `vault rm <name>` | delete from OS credential store + manifest | confirmation |
 | ~~`vault get`~~ | **does not exist.** That's the point. | — |
 
 ## For humans: the app
 
-Claude works the CLI. You get a native macOS menu-bar app — **`⌥⌘V`** from anywhere:
+Agents work the CLI. You get a native tray/menu-bar app — **`⌥⌘V` on macOS** or **`Ctrl+Alt+V` on Windows**:
 
 <div align="center"><img src="assets/app.png" alt="Blind Vault.app: frameless glass window with real macOS vibrancy — pointer list with scope chips, ID chips and last-used dates; add-a-secret form whose password field goes straight to the Keychain" width="880" /></div>
 
-Tauri 2, no dock icon, a sunglasses icon in the menu bar, frameless window with real NSVisualEffectView vibrancy, `esc` to hide. The Rust side calls `security`/`pbcopy` in-process — no server, no port, no token to protect. Build it with `cd app && npx @tauri-apps/cli build`, drop it in `/Applications`, add it to Login Items and forget it's there.
+The Tauri 2 app has a sunglasses tray icon, `esc` to hide, a strict Content Security Policy, and no secret-returning IPC command. Its Rust backend uses Keychain on macOS and the same `BlindVault:v1:` Credential Manager entries as the Windows CLI. Clipboard values clear after 30 seconds only if the clipboard is still unchanged. Build it with `cd app && npx @tauri-apps/cli build`; Windows produces an NSIS installer and requires the normal Tauri Rust/MSVC/WebView2 prerequisites.
 
 Don't want to build a native app? `vault ui` serves the same dashboard as a local-only web page (`127.0.0.1`, per-session token + Origin check against DNS rebinding, python3 stdlib).
 
-Either way: add secrets in a proper form — the password field goes **form → Keychain**, never rendered back, never in any response. There is no "reveal" button. There will never be a "reveal" button.
+Either way: add secrets in a proper form — the password field goes **form → OS credential store**, never rendered back, never in any response. There is no "reveal" button. There will never be a "reveal" button.
 
 The two surfaces *are* the security model: the human-facing surface has a password field; the agent-facing surface has a table with no value column.
 
 ## Hands-free login
 
-Logins are one entry: the **ID is pointer metadata** (the agent reads it, says it, types it freely) and the **password is the value** (Keychain, blind). Then:
+Logins are one entry: the **ID is pointer metadata** (the agent reads it, says it, types it freely) and the **password is the value** (the OS credential store, blind). Then:
 
 ```bash
 vault type github-login --account --enter --delay 5
 ```
 
-You click the username field once (GitHub even autofocuses it) — the OS types ID → Tab → password → Return as raw keystrokes. The value's path is Keychain → env → System Events. It never appears on screen, on the clipboard, or in the agent's context.
+You click the username field once — the OS types ID → Tab → password → Return as raw keystrokes. On Windows the value travels WinCred → `SendInput`; on macOS it travels Keychain → System Events. It never appears on the clipboard or in the agent's context.
 
 Two guards, because keystrokes are a loaded gun:
 
-- **Frontmost-app guard** — if anything but a browser is focused when the delay ends, it aborts having typed *nothing*. A missed click can never spray your password into a chat box, an editor, or a search bar. (We watched this fire in real use on day one — it aborted with `frontmost app is 'Claude', not a browser`. Working as designed.)
-- Needs a one-time **Accessibility** grant for the host app; the error tells you where.
+- **Browser guard** — if an allowlisted browser process is not frontmost when the delay ends, it aborts having typed *nothing*.
+- **Windows field guard** — UI Automation must report a real password edit field before the secret is even read. With `--account`, the ID and Tab happen first; if Tab does not land on a password field, the secret remains unread and untyped. Held modifier keys, mouse buttons, focus changes, minimized windows, partial input, and elevated targets all fail closed without automatic retry.
+- macOS needs a one-time **Accessibility** grant for the host app; the error tells you where.
+
+These guards prevent accidental spraying into editors, chats, and browser address bars. They do not prove the current page's URL: a malicious page inside an allowed browser can still expose a password field. The user's deliberate click remains the authorization boundary; cryptographic domain binding would require a browser extension/native-messaging integration.
 
 `vault copy <name>` (clipboard, 30 s auto-clear) remains the manual fallback.
 
@@ -177,13 +190,13 @@ The CLI is half the project. The other half is [SKILL.md](SKILL.md) — the disc
 | A leaky child process (`curl -v`, stack traces, debug logs) | output scrubbing: the value becomes `[REDACTED:<name>]` |
 | "Which key was that again?" sprawl | pointer manifest = agent-readable memory |
 
-**Does not protect against:** malware running as you (it can read your Keychain too — swap in a password manager's CLI as the backend if that's your bar), a brief `ps` window during `vault add`, or clipboard sniffing during the 30 s `vault copy` window. This is a context-boundary tool, not an HSM.
+**Does not protect against:** malware running as you (same-user code can read Keychain/Generic Credential Manager entries too — swap in a password manager's broker if that's your bar), a brief `ps` window in the macOS `security` backend, or clipboard sniffing during the 30 s `vault copy` window. `allowed_for` matches the composed command, not a cryptographically verified destination, and `vault type` cannot verify the browser URL. This is a context-boundary tool, not a sandbox or HSM.
 
 ## "Isn't this Infisical's agent-vault?"
 
 Different layer, same problem — and you might genuinely want theirs instead. [agent-vault](https://github.com/Infisical/agent-vault) is a brokered credential proxy: a Go server (ideally on a separate machine) that MITMs your agent's HTTPS traffic and injects real credentials on the way out. Stronger guarantee — the agent process never holds a real value at all — at the cost of infrastructure: a server, a master password, proxy bootstrapping, per-agent tokens.
 
-blind-vault is the local-first version for one person and one Mac: ~200 lines of bash, the Keychain you already have, no server, no account, installed before your coffee cools. It also covers what a proxy can't — anything that isn't an HTTP call (SSH keys, DB passwords, signing keys, arbitrary CLIs) — and ships the piece a proxy doesn't have: the **skill layer** that teaches the agent how to *behave* around secrets, not just where to fetch them.
+blind-vault is the local-first version for one person on macOS or Windows: the OS credential store you already have, no account and no required server. It also covers what a proxy can't — anything that isn't an HTTP call (SSH keys, DB passwords, signing keys, arbitrary CLIs) — and ships the piece a proxy doesn't have: the **skill layer** that teaches the agent how to *behave* around secrets, not just where to fetch them.
 
 Running remote agent fleets or untrusted sandboxes? Use agent-vault. It's good.
 
