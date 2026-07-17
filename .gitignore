@@ -1,3 +1,6 @@
 .DS_Store
 app/src-tauri/target/
 .gstack/
+__pycache__/
+*.py[cod]
+
