@@ -495,7 +495,165 @@ function Get-FocusedFieldState {
             IsPassword = $passwordValue -is [bool] -and [bool]$passwordValue
         }
     } catch {
-        return…1539 tokens truncated…orm,
+        return [pscustomobject]@{ IsEdit = $false; IsPassword = $false }
+    }
+}
+
+function Test-ControlCharacter {
+    param([AllowEmptyString()][string]$Value)
+    return -not [string]::IsNullOrEmpty($Value) -and
+        [Regex]::IsMatch($Value, '[\x00-\x1F\x7F]')
+}
+
+function Initialize-Vault {
+    if (-not (Test-Path -LiteralPath $script:VaultDir)) {
+        New-Item -ItemType Directory -Path $script:VaultDir -Force | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $script:ManifestPath)) {
+        Save-Manifest ([pscustomobject]@{ secrets = @() })
+    }
+    Write-Output "vault ready at $script:VaultDir (pointers only - values live in Windows Credential Manager)"
+}
+
+function Get-Manifest {
+    if (-not (Test-Path -LiteralPath $script:ManifestPath)) {
+        Stop-Vault 'not initialized - run: vault init'
+    }
+
+    $raw = [IO.File]::ReadAllText($script:ManifestPath, [Text.Encoding]::UTF8)
+    try {
+        $manifest = $raw | ConvertFrom-Json
+    } catch {
+        Stop-Vault "invalid manifest JSON at $script:ManifestPath"
+    }
+
+    if ($null -eq $manifest.PSObject.Properties['secrets']) {
+        Stop-Vault "invalid manifest: missing 'secrets' array"
+    }
+    $manifest.secrets = @($manifest.secrets)
+    return $manifest
+}
+
+function Save-Manifest {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    if (-not (Test-Path -LiteralPath $script:VaultDir)) {
+        New-Item -ItemType Directory -Path $script:VaultDir -Force | Out-Null
+    }
+
+    $json = $Manifest | ConvertTo-Json -Depth 8
+    $tempPath = Join-Path $script:VaultDir ('.manifest.' + [Guid]::NewGuid().ToString('N') + '.tmp')
+    $utf8NoBom = New-Object Text.UTF8Encoding($false)
+    try {
+        [IO.File]::WriteAllText($tempPath, $json + [Environment]::NewLine, $utf8NoBom)
+        Initialize-NativeCredentialApi
+        [BlindVault.AtomicFile]::Replace($tempPath, $script:ManifestPath)
+    } finally {
+        if (Test-Path -LiteralPath $tempPath) {
+            Remove-Item -LiteralPath $tempPath -Force
+        }
+    }
+}
+
+function Find-Pointer {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+    return @($Manifest.secrets | Where-Object {
+        ([string]$_.name).Equals($Name, [StringComparison]::OrdinalIgnoreCase)
+    }) | Select-Object -First 1
+}
+
+function Read-SecretValue {
+    param(
+        [switch]$FromStdin,
+        [string]$Name = 'secret'
+    )
+
+    if ($FromStdin) {
+        $value = [Console]::In.ReadLine()
+        if ($null -eq $value) {
+            Stop-Vault 'no value received on standard input'
+        }
+        return $value
+    }
+
+    return Show-SecretDialog $Name
+}
+
+function Show-SecretDialog {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    if (-not [Environment]::UserInteractive) {
+        Stop-Vault 'no interactive Windows desktop is available; use --from-stdin for automation'
+    }
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne [Threading.ApartmentState]::STA) {
+        Stop-Vault 'the secure input dialog requires an STA PowerShell session; run via bin\vault.cmd'
+    }
+
+    $form = New-Object Windows.Forms.Form
+    $title = New-Object Windows.Forms.Label
+    $description = New-Object Windows.Forms.Label
+    $secretBox = New-Object Windows.Forms.TextBox
+    $saveButton = New-Object Windows.Forms.Button
+    $cancelButton = New-Object Windows.Forms.Button
+    $accepted = $false
+    $value = $null
+
+    try {
+        $form.Text = 'Blind Vault'
+        $form.ClientSize = New-Object Drawing.Size(460, 210)
+        $form.FormBorderStyle = [Windows.Forms.FormBorderStyle]::FixedDialog
+        $form.StartPosition = [Windows.Forms.FormStartPosition]::CenterScreen
+        $form.MaximizeBox = $false
+        $form.MinimizeBox = $false
+        $form.ShowIcon = $false
+        $form.ShowInTaskbar = $false
+        $form.TopMost = $false
+        $form.AutoScaleMode = [Windows.Forms.AutoScaleMode]::Dpi
+        $form.BackColor = [Drawing.Color]::FromArgb(246, 247, 249)
+
+        $title.AutoSize = $true
+        $title.Location = New-Object Drawing.Point(24, 22)
+        $title.Font = New-Object Drawing.Font('Segoe UI Semibold', 13)
+        $title.Text = "Store '$Name'"
+
+        $description.AutoSize = $false
+        $description.Location = New-Object Drawing.Point(26, 56)
+        $description.Size = New-Object Drawing.Size(408, 42)
+        $description.Font = New-Object Drawing.Font('Segoe UI', 9)
+        $description.ForeColor = [Drawing.Color]::FromArgb(75, 82, 92)
+        $description.Text = "Paste the value below. It is sent directly to Windows Credential Manager and is never printed."
+
+        $secretBox.Location = New-Object Drawing.Point(28, 104)
+        $secretBox.Size = New-Object Drawing.Size(404, 28)
+        $secretBox.Font = New-Object Drawing.Font('Segoe UI', 10)
+        $secretBox.UseSystemPasswordChar = $true
+        $secretBox.AccessibleName = 'Secret value'
+
+        $saveButton.Location = New-Object Drawing.Point(258, 154)
+        $saveButton.Size = New-Object Drawing.Size(84, 32)
+        $saveButton.Text = 'Save'
+        $saveButton.Add_Click({
+            $candidate = $secretBox.Text
+            if ([string]::IsNullOrEmpty($candidate)) {
+                [void][Windows.Forms.MessageBox]::Show(
+                    $form,
+                    'Enter a non-empty value.',
+                    'Blind Vault',
+                    [Windows.Forms.MessageBoxButtons]::OK,
+                    [Windows.Forms.MessageBoxIcon]::Warning
+                )
+                return
+            }
+            if ([Text.Encoding]::UTF8.GetByteCount($candidate) -gt 2560) {
+                [void][Windows.Forms.MessageBox]::Show(
+                    $form,
                     'The UTF-8 value exceeds the 2,560-byte Windows Credential Manager limit.',
                     'Blind Vault',
                     [Windows.Forms.MessageBoxButtons]::OK,
