@@ -1018,13 +1018,13 @@ function Invoke-Type {
         ([string]$_).Equals($frontProcess, [StringComparison]::OrdinalIgnoreCase)
     }).Count -gt 0
     if (-not $isAllowed) {
-        Stop-Vault "frontmost process is '$frontProcess', not an allowed browser - aborted, nothing typed. (override: BLINDVAULT_TYPE_APPS)"
+        Stop-Vault "frontmost process is '$frontProcess', not an allowed browser - aborted, nothing was typed. (override: BLINDVAULT_TYPE_APPS)"
     }
 
     if ($withAccount) {
         $initialField = Get-FocusedFieldState
         if (-not $initialField.IsEdit -or $initialField.IsPassword) {
-            Stop-Vault 'focus a non-password username/account field before using --account; nothing typed'
+            Stop-Vault 'focus a non-password username/account field before using --account; nothing was typed'
         }
         [BlindVault.SecureTyper]::SendAccountAndTab($window, $account)
 
@@ -1044,7 +1044,7 @@ function Invoke-Type {
     } else {
         $passwordField = Get-FocusedFieldState
         if (-not $passwordField.IsEdit -or -not $passwordField.IsPassword) {
-            Stop-Vault 'focus a browser password field before typing a secret; nothing typed'
+            Stop-Vault 'focus a browser password field before typing a secret; nothing was typed'
         }
     }
 
