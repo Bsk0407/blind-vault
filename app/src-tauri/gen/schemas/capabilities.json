@@ -1,1 +1,1 @@
-{}
+{"main-capability":{"identifier":"main-capability","description":"Only the bundled Blind Vault window may hide itself.","local":true,"windows":["main"],"permissions":["core:window:allow-hide"],"platforms":["macOS","windows"]}}

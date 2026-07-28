@@ -1,13 +1,13 @@
 {
   "productName": "Blind Vault",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.anyejun.blindvault",
   "build": {
     "frontendDist": "../ui"
   },
   "app": {
     "withGlobalTauri": true,
-    "macOSPrivateApi": true,
+    "macOSPrivateApi": false,
     "windows": [
       {
         "label": "main",
@@ -18,28 +18,37 @@
         "minHeight": 480,
         "resizable": true,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "center": true,
         "visible": false,
         "shadow": true
       }
     ],
     "security": {
-      "csp": null
+      "capabilities": ["main-capability"],
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' asset: http://asset.localhost data:",
+        "script-src": "'self'",
+        "style-src": "'self'"
+      },
+      "headers": {
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-Content-Type-Options": "nosniff"
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
     "category": "DeveloperTool",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns"
-    ],
-    "macOS": {
-      "minimumSystemVersion": "10.15"
-    }
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }
+
